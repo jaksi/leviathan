@@ -7,6 +7,7 @@ Also, while it doesn't seem like the hardware could be damaged by silly USB mess
 
 # Supported devices
 * NZXT Kraken X61 (Vendor/Product ID: `2433:b200`)
+* NZXT Kraken X41 (Vendor/Product ID: `2433:b200`)
 
 If you have an unsupported liquid cooler and want to help out, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
