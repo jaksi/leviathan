@@ -18,7 +18,7 @@ If you have an unsupported liquid cooler and want to help out, see [CONTRIBUTING
 Make sure the headers for the kernel you are running are installed.
 ```Shell
 make
-sudo modprobe kraken.ko
+sudo insmod kraken.ko
 ```
 
 # Usage
