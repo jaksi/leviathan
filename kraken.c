@@ -314,7 +314,7 @@ static int kraken_probe(struct usb_interface *interface, const struct usb_device
 	dev->color.r = 255; dev->color.g = 0; dev->color.b = 0;
 	dev->alternate_color.r = 0; dev->alternate_color.g = 255; dev->alternate_color.b = 0;
 	dev->interval = 1;
-	dev->mode = alternating;
+	dev->mode = normal;
 	dev->temp = 0;
 	dev->pump = 0;
 	dev->fan = 0;
