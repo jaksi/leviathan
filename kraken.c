@@ -285,6 +285,18 @@ static ssize_t set_fan(struct device *dev, struct device_attribute *attr, const 
 
 static DEVICE_ATTR(fan, S_IRUGO, show_fan, set_fan);
 
+static void kraken_remove_device_files(struct usb_interface *interface)
+{
+	device_remove_file(&interface->dev, &dev_attr_speed);
+	device_remove_file(&interface->dev, &dev_attr_color);
+	device_remove_file(&interface->dev, &dev_attr_alternate_color);
+	device_remove_file(&interface->dev, &dev_attr_interval);
+	device_remove_file(&interface->dev, &dev_attr_mode);
+	device_remove_file(&interface->dev, &dev_attr_temp);
+	device_remove_file(&interface->dev, &dev_attr_pump);
+	device_remove_file(&interface->dev, &dev_attr_fan);
+}
+
 static int kraken_probe(struct usb_interface *interface, const struct usb_device_id *id)
 {
 	struct usb_device *udev = interface_to_usbdev(interface);
@@ -338,14 +350,7 @@ static int kraken_probe(struct usb_interface *interface, const struct usb_device
 	dev_info(&interface->dev, "Kraken connected\n");
 	return 0;
 error:
-	device_remove_file(&interface->dev, &dev_attr_speed);
-	device_remove_file(&interface->dev, &dev_attr_color);
-	device_remove_file(&interface->dev, &dev_attr_alternate_color);
-	device_remove_file(&interface->dev, &dev_attr_interval);
-	device_remove_file(&interface->dev, &dev_attr_mode);
-	device_remove_file(&interface->dev, &dev_attr_temp);
-	device_remove_file(&interface->dev, &dev_attr_pump);
-	device_remove_file(&interface->dev, &dev_attr_fan);
+	kraken_remove_device_files(interface);
 
 	usb_set_intfdata(interface, NULL);
 	usb_put_dev(dev->udev);
@@ -359,14 +364,7 @@ static void kraken_disconnect(struct usb_interface *interface)
 {
 	struct usb_kraken *dev = usb_get_intfdata(interface);
 
-	device_remove_file(&interface->dev, &dev_attr_speed);
-	device_remove_file(&interface->dev, &dev_attr_color);
-	device_remove_file(&interface->dev, &dev_attr_alternate_color);
-	device_remove_file(&interface->dev, &dev_attr_interval);
-	device_remove_file(&interface->dev, &dev_attr_mode);
-	device_remove_file(&interface->dev, &dev_attr_temp);
-	device_remove_file(&interface->dev, &dev_attr_pump);
-	device_remove_file(&interface->dev, &dev_attr_fan);
+	kraken_remove_device_files(interface);
 
 	usb_set_intfdata(interface, NULL);
 	usb_put_dev(dev->udev);
