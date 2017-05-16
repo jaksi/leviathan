@@ -112,7 +112,11 @@ static ssize_t set_speed(struct device *dev, struct device_attribute *attr, cons
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct usb_kraken *kraken = usb_get_intfdata(intf);
 
-	kraken->speed = simple_strtoul(buf, NULL, 10);
+	u8 speed;
+	if (sscanf(buf, "%hhu", &speed) != 1 || speed < 30 || speed > 100 || speed % 5 != 0)
+		return -EINVAL;
+
+	kraken->speed = speed;
 
 	send_stuff(dev);
 
@@ -134,10 +138,13 @@ static ssize_t set_color(struct device *dev, struct device_attribute *attr, cons
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct usb_kraken *kraken = usb_get_intfdata(intf);
 
-	u32 color = simple_strtoul(buf, NULL, 16);
-	kraken->color.r = color >> 16 & 0xff;
-	kraken->color.g = color >>  8 & 0xff;
-	kraken->color.b = color >>  0 & 0xff;
+	u8 r, g, b;
+	if (sscanf(buf, "%02hhx%02hhx%02hhx", &r, &g, &b) != 3)
+		return -EINVAL;
+
+	kraken->color.r = r;
+	kraken->color.g = g;
+	kraken->color.b = b;
 
 	send_stuff(dev);
 
@@ -159,10 +166,13 @@ static ssize_t set_alternate_color(struct device *dev, struct device_attribute *
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct usb_kraken *kraken = usb_get_intfdata(intf);
 
-	u32 color = simple_strtoul(buf, NULL, 16);
-	kraken->alternate_color.r = color >> 16 & 0xff;
-	kraken->alternate_color.g = color >>  8 & 0xff;
-	kraken->alternate_color.b = color >>  0 & 0xff;
+	u8 r, g, b;
+	if (sscanf(buf, "%02hhx%02hhx%02hhx", &r, &g, &b) != 3)
+		return -EINVAL;
+
+	kraken->alternate_color.r = r;
+	kraken->alternate_color.g = g;
+	kraken->alternate_color.b = b;
 
 	send_stuff(dev);
 
@@ -184,7 +194,11 @@ static ssize_t set_interval(struct device *dev, struct device_attribute *attr, c
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct usb_kraken *kraken = usb_get_intfdata(intf);
 
-	kraken->interval = simple_strtoul(buf, NULL, 10);
+	u8 interval;
+	if (sscanf(buf, "%hhu", &interval) != 1 || interval == 0)
+		return -EINVAL;
+
+	kraken->interval = interval;
 
 	send_stuff(dev);
 
@@ -209,7 +223,7 @@ static ssize_t show_mode(struct device *dev, struct device_attribute *attr, char
 		case off:
 			return sprintf(buf, "off\n");
 		default:
-			return sprintf(buf, "there's trouble\n");
+			return sprintf(buf, "unknown\n");
 	}
 }
 
@@ -226,6 +240,8 @@ static ssize_t set_mode(struct device *dev, struct device_attribute *attr, const
 		kraken->mode = blinking;
 	else if (strncasecmp(buf, "off", strlen("off")) == 0)
 		kraken->mode = off;
+	else
+		return -EINVAL;
 
 	send_stuff(dev);
 
@@ -244,12 +260,7 @@ static ssize_t show_temp(struct device *dev, struct device_attribute *attr, char
 	return sprintf(buf, "%u\n", kraken->temp);
 }
 
-static ssize_t set_temp(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
-{
-	return count;
-}
-
-static DEVICE_ATTR(temp, S_IRUGO, show_temp, set_temp);
+static DEVICE_ATTR(temp, S_IRUGO, show_temp, NULL);
 
 static ssize_t show_pump(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -261,12 +272,7 @@ static ssize_t show_pump(struct device *dev, struct device_attribute *attr, char
 	return sprintf(buf, "%u\n", kraken->pump);
 }
 
-static ssize_t set_pump(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
-{
-	return count;
-}
-
-static DEVICE_ATTR(pump, S_IRUGO, show_pump, set_pump);
+static DEVICE_ATTR(pump, S_IRUGO, show_pump, NULL);
 
 static ssize_t show_fan(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -278,12 +284,7 @@ static ssize_t show_fan(struct device *dev, struct device_attribute *attr, char 
 	return sprintf(buf, "%u\n", kraken->fan);
 }
 
-static ssize_t set_fan(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
-{
-	return count;
-}
-
-static DEVICE_ATTR(fan, S_IRUGO, show_fan, set_fan);
+static DEVICE_ATTR(fan, S_IRUGO, show_fan, NULL);
 
 static void kraken_remove_device_files(struct usb_interface *interface)
 {
