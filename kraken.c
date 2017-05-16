@@ -318,29 +318,16 @@ static int kraken_probe(struct usb_interface *interface, const struct usb_device
 	dev->pump = 0;
 	dev->fan = 0;
 
-	retval = device_create_file(&interface->dev, &dev_attr_speed);
-	if (retval)
-		goto error;
-	retval = device_create_file(&interface->dev, &dev_attr_color);
-	if (retval)
-		goto error;
-	retval = device_create_file(&interface->dev, &dev_attr_alternate_color);
-	if (retval)
-		goto error;
-	retval = device_create_file(&interface->dev, &dev_attr_interval);
-	if (retval)
-		goto error;
-	retval = device_create_file(&interface->dev, &dev_attr_mode);
-	if (retval)
-		goto error;
-	retval = device_create_file(&interface->dev, &dev_attr_temp);
-	if (retval)
-		goto error;
-	retval = device_create_file(&interface->dev, &dev_attr_pump);
-	if (retval)
-		goto error;
-	retval = device_create_file(&interface->dev, &dev_attr_fan);
-	if (retval)
+	if (
+		(retval = device_create_file(&interface->dev, &dev_attr_speed)) ||
+		(retval = device_create_file(&interface->dev, &dev_attr_color)) ||
+		(retval = device_create_file(&interface->dev, &dev_attr_alternate_color)) ||
+		(retval = device_create_file(&interface->dev, &dev_attr_interval)) ||
+		(retval = device_create_file(&interface->dev, &dev_attr_mode)) ||
+		(retval = device_create_file(&interface->dev, &dev_attr_temp)) ||
+		(retval = device_create_file(&interface->dev, &dev_attr_pump)) ||
+		(retval = device_create_file(&interface->dev, &dev_attr_fan))
+	)
 		goto error;
 
 	retval = usb_control_msg(udev, usb_sndctrlpipe(udev, 0), 2, 0x40, 0x0002, 0, NULL, 0, 1000);
