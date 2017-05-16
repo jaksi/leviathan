@@ -332,7 +332,7 @@ static int kraken_probe(struct usb_interface *interface, const struct usb_device
 	int retval = -ENOMEM;
 	dev = kmalloc(sizeof(struct usb_kraken), GFP_KERNEL);
 	if (!dev)
-		goto error_mem;
+		goto error_dev;
 
 	dev->udev = usb_get_dev(udev);
 	usb_set_intfdata(interface, dev);
@@ -346,27 +346,26 @@ static int kraken_probe(struct usb_interface *interface, const struct usb_device
 	dev->pump = 0;
 	dev->fan = 0;
 
-	// TODO: memleak if either of these allocations fail
 	dev->pump_message = kmalloc(2 * sizeof(u8), GFP_KERNEL);
 	if (!dev->pump_message)
-		goto error_mem;
+		goto error_pump;
 	dev->pump_message[0] = 0x13;
 
 	dev->fan_message = kmalloc(2 * sizeof(u8), GFP_KERNEL);
 	if (!dev->fan_message)
-		goto error_mem;
+		goto error_fan;
 	dev->fan_message[0] = 0x12;
 
 	dev->color_message = kmalloc(19 * sizeof(u8), GFP_KERNEL);
 	if (!dev->color_message)
-		goto error_mem;
+		goto error_color;
 	dev->color_message[0] = 0x10;
 	dev->color_message[7] = 0xff; dev->color_message[8] = 0x00; dev->color_message[9] = 0x00; dev->color_message[10] = 0x3c;
 	dev->color_message[16] = 0x01; dev->color_message[17] = 0x00; dev->color_message[18] = 0x01;
 
 	dev->status_message = kmalloc(64 * sizeof(u8), GFP_KERNEL);
 	if (!dev->status_message)
-		goto error_mem;
+		goto error_status;
 
 	if (
 		(retval = device_create_file(&interface->dev, &dev_attr_speed)) ||
@@ -387,17 +386,21 @@ static int kraken_probe(struct usb_interface *interface, const struct usb_device
 	dev_info(&interface->dev, "Kraken connected\n");
 	return 0;
 error:
+	kfree(dev->status_message);
+error_status:
+	kfree(dev->color_message);
+error_color:
+	kfree(dev->fan_message);
+error_fan:
+	kfree(dev->pump_message);
+error_pump:
+	kfree(dev);
+
 	kraken_remove_device_files(interface);
 
 	usb_set_intfdata(interface, NULL);
 	usb_put_dev(dev->udev);
-
-	kfree(dev->status_message);
-	kfree(dev->color_message);
-	kfree(dev->fan_message);
-	kfree(dev->pump_message);
-	kfree(dev);
-error_mem:
+error_dev:
 	return retval;
 }
 
