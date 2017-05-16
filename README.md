@@ -1,8 +1,6 @@
 # kraken
 Linux device driver that supports controlling and monitoring NZXT Kraken water coolers
 
-It's in a **very early stage**. Many error checks and input validations are missing. Bad things might happen in your kernel.
-
 NZXT is **NOT** involved in this project, do **NOT** contact them if your device is damaged while using this software.
 
 Also, while it doesn't seem like the hardware could be damaged by silly USB messages (apart from overheating), I do **NOT** take any responsibility for any damage done to your cooler.
