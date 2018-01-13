@@ -26,7 +26,7 @@ Type | Description | Length in bytes
 Notes:
 * The pump speed doesn't seem to be too responsive
 * The Windows software always matches the pump and fan speeds
-* While the Windows software lets you set the speed to 25%, it will actually send a message containing 30% to the device
+* While the Windows software lets you set the speed to as low as 25%, it actually won't send messages containing speeds less than 30% to the device
 
 #### Color message
 
@@ -45,18 +45,19 @@ Byte | Meaning
 Notes:
 * Byte 10 has something to do with alternating mode, values <= 0x20 stop the color change
 * Changing byte 18 to anything other than 0x01 ramps up the speed to 100%
+* Newer versions of CAM (checked in 3.5.50) no longer allow changing the blinking and alternating interval
 
 #### Fan speed message
 
 Byte | Meaning
 -----|--------
-1 | Fan speed percentage (30-100, steps of 5)
+1 | Fan speed percentage (30-100)
 
 #### Pump speed message
 
 Byte | Meaning
 -----|--------
-1 | Pump speed percentage (30-100, steps of 5)
+1 | Pump speed percentage (30-100)
 
 ### Status message sent by the cooler
 Byte | Meaning
