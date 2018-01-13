@@ -34,13 +34,13 @@ Byte | Meaning
 -----|--------
 1-3 | Color (RGB)
 4-6 | Alternate color (RGB)
-7-10 | `0xff00003c`
+7-10 | `0x0000003c`
 11 | Alternating interval (sec)
 12 | Blinking interval (sec)
 13 | Enabled (on/off)
 14 | Alternating mode (on/off)
 15 | Blinking mode (on/off)
-16-18 | `0x010001`
+16-18 | `0x000001`
 
 Notes:
 * Byte 10 has something to do with alternating mode, values <= 0x20 stop the color change
@@ -79,8 +79,7 @@ Python code:
 dev.ctrl_transfer(0x40, 2, 0x0001)
 ```
 Afterwards, one of the following sequence of bulk messages are sent to endpoint `0x02`:
-* a pump speed message followed by a color message
-* a fan speed message
+* a color message
 * a pump speed message followed by a fan speed message
 
 Python code:
