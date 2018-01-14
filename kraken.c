@@ -9,25 +9,10 @@ static const struct usb_device_id id_table[] = {
 
 MODULE_DEVICE_TABLE(usb, id_table);
 
-struct kraken_color {
-	u8 r, g, b;
-};
-
 struct usb_kraken {
 	struct usb_device *udev;
 	struct usb_interface *interface;
-	u8 speed;
-	struct kraken_color color, alternate_color;
-	u8 interval;
-	enum {
-		normal,
-		alternating,
-		blinking,
-		off
-	} mode;
-	u8 temp;
-	u16 pump, fan;
-	u8 *pump_message, *fan_message, *color_message, *status_message;
+	u8 *color_message, *pump_message, *fan_message, *status_message;
 };
 
 static int kraken_probe(struct usb_interface *interface, const struct usb_device_id *id);
@@ -45,46 +30,24 @@ static int kraken_start_transaction(struct usb_kraken *kraken)
 	return usb_control_msg(kraken->udev, usb_sndctrlpipe(kraken->udev, 0), 2, 0x40, 0x0001, 0, NULL, 0, 1000);
 }
 
-static int kraken_send_pump_message(struct usb_kraken *kraken)
+static int kraken_send_message(struct usb_kraken *kraken, u8 *message, int length)
 {
-	int len;
-	int retval = usb_bulk_msg(kraken->udev, usb_sndbulkpipe(kraken->udev, 2), kraken->pump_message, 2, &len, 3000);
+	int sent;
+	int retval = usb_bulk_msg(kraken->udev, usb_sndbulkpipe(kraken->udev, 2), message, length, &sent, 3000);
 	if (retval != 0)
 		return retval;
-	if (len != 2)
+	if (sent != length)
 		return -EIO;
 	return 0;
 }
 
-static int kraken_send_fan_message(struct usb_kraken *kraken)
+static int kraken_receive_message(struct usb_kraken *kraken, u8 message[], int expected_length)
 {
-	int len;
-	int retval = usb_bulk_msg(kraken->udev, usb_sndbulkpipe(kraken->udev, 2), kraken->fan_message, 2, &len, 3000);
+	int received;
+	int retval = usb_bulk_msg(kraken->udev, usb_rcvbulkpipe(kraken->udev, 2), message, expected_length, &received, 3000);
 	if (retval != 0)
 		return retval;
-	if (len != 2)
-		return -EIO;
-	return 0;
-}
-
-static int kraken_send_color_message(struct usb_kraken *kraken)
-{
-	int len;
-	int retval = usb_bulk_msg(kraken->udev, usb_sndbulkpipe(kraken->udev, 2), kraken->color_message, 19, &len, 3000);
-	if (retval != 0)
-		return retval;
-	if (len != 19)
-		return -EIO;
-	return 0;
-}
-
-static int kraken_receive_status_message(struct usb_kraken *kraken)
-{
-	int len;
-	int retval = usb_bulk_msg(kraken->udev, usb_rcvbulkpipe(kraken->udev, 2), kraken->status_message, 64, &len, 3000);
-	if (retval != 0)
-		return retval;
-	if (len != 32)
+	if (received != expected_length)
 		return -EIO;
 	return 0;
 }
@@ -92,38 +55,16 @@ static int kraken_receive_status_message(struct usb_kraken *kraken)
 static void kraken_update(struct usb_kraken *kraken)
 {
 	int retval = 0;
-
-	kraken->pump_message[1] = kraken->speed;
-	kraken->fan_message[1] = kraken->speed;
-
-	kraken->color_message[1] = kraken->color.r;
-	kraken->color_message[2] = kraken->color.g;
-	kraken->color_message[3] = kraken->color.b;
-
-	kraken->color_message[4] = kraken->alternate_color.r;
-	kraken->color_message[5] = kraken->alternate_color.g;
-	kraken->color_message[6] = kraken->alternate_color.b;
-
-	kraken->color_message[11] = kraken->interval; kraken->color_message[12] = kraken->interval;
-
-	kraken->color_message[13] = kraken->mode == off ? 0 : 1;
-	kraken->color_message[14] = kraken->mode == alternating ? 1 : 0;
-	kraken->color_message[15] = kraken->mode == blinking ? 1 : 0;
-
 	if (
 		(retval = kraken_start_transaction(kraken)) ||
-		(retval = kraken_send_pump_message(kraken)) ||
-		(retval = kraken_send_color_message(kraken)) ||
-		(retval = kraken_receive_status_message(kraken)) ||
+		(retval = kraken_send_message(kraken, kraken->color_message, 19)) ||
+		(retval = kraken_receive_message(kraken, kraken->status_message, 32)) ||
 		(retval = kraken_start_transaction(kraken)) ||
-		(retval = kraken_send_fan_message(kraken)) ||
-		(retval = kraken_receive_status_message(kraken))
+		(retval = kraken_send_message(kraken, kraken->pump_message, 2)) ||
+		(retval = kraken_send_message(kraken, kraken->fan_message, 2)) ||
+		(retval = kraken_receive_message(kraken, kraken->status_message, 32))
 	   )
 		dev_err(&kraken->udev->dev, "Failed to update: %d\n", retval);
-
-	kraken->fan = 256 * kraken->status_message[0] + kraken->status_message[1];
-	kraken->pump = 256 * kraken->status_message[8] + kraken->status_message[9];
-	kraken->temp = kraken->status_message[10];
 }
 
 static ssize_t show_speed(struct device *dev, struct device_attribute *attr, char *buf)
@@ -131,7 +72,7 @@ static ssize_t show_speed(struct device *dev, struct device_attribute *attr, cha
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct usb_kraken *kraken = usb_get_intfdata(intf);
 
-	return sprintf(buf, "%u\n", kraken->speed);
+	return sprintf(buf, "%u\n", kraken->pump_message[1]);
 }
 
 static ssize_t set_speed(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -140,10 +81,11 @@ static ssize_t set_speed(struct device *dev, struct device_attribute *attr, cons
 	struct usb_kraken *kraken = usb_get_intfdata(intf);
 
 	u8 speed;
-	if (sscanf(buf, "%hhu", &speed) != 1 || speed < 30 || speed > 100 || speed % 5 != 0)
+	if (sscanf(buf, "%hhu", &speed) != 1 || speed < 30 || speed > 100)
 		return -EINVAL;
 
-	kraken->speed = speed;
+	kraken->pump_message[1] = speed;
+	kraken->fan_message[1] = speed;
 
 	kraken_update(kraken);
 
@@ -157,7 +99,7 @@ static ssize_t show_color(struct device *dev, struct device_attribute *attr, cha
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct usb_kraken *kraken = usb_get_intfdata(intf);
 
-	return sprintf(buf, "%02x%02x%02x\n", kraken->color.r, kraken->color.g, kraken->color.b);
+	return sprintf(buf, "%02x%02x%02x\n", kraken->color_message[1], kraken->color_message[2], kraken->color_message[3]);
 }
 
 static ssize_t set_color(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -169,9 +111,9 @@ static ssize_t set_color(struct device *dev, struct device_attribute *attr, cons
 	if (sscanf(buf, "%02hhx%02hhx%02hhx", &r, &g, &b) != 3)
 		return -EINVAL;
 
-	kraken->color.r = r;
-	kraken->color.g = g;
-	kraken->color.b = b;
+	kraken->color_message[1] = r;
+	kraken->color_message[2] = g;
+	kraken->color_message[3] = b;
 
 	kraken_update(kraken);
 
@@ -185,7 +127,7 @@ static ssize_t show_alternate_color(struct device *dev, struct device_attribute 
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct usb_kraken *kraken = usb_get_intfdata(intf);
 
-	return sprintf(buf, "%02x%02x%02x\n", kraken->alternate_color.r, kraken->alternate_color.g, kraken->alternate_color.b);
+	return sprintf(buf, "%02x%02x%02x\n", kraken->color_message[4], kraken->color_message[5], kraken->color_message[6]);
 }
 
 static ssize_t set_alternate_color(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -197,9 +139,9 @@ static ssize_t set_alternate_color(struct device *dev, struct device_attribute *
 	if (sscanf(buf, "%02hhx%02hhx%02hhx", &r, &g, &b) != 3)
 		return -EINVAL;
 
-	kraken->alternate_color.r = r;
-	kraken->alternate_color.g = g;
-	kraken->alternate_color.b = b;
+	kraken->color_message[4] = r;
+	kraken->color_message[5] = g;
+	kraken->color_message[6] = b;
 
 	kraken_update(kraken);
 
@@ -213,7 +155,7 @@ static ssize_t show_interval(struct device *dev, struct device_attribute *attr, 
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct usb_kraken *kraken = usb_get_intfdata(intf);
 
-	return sprintf(buf, "%u\n", kraken->interval);
+	return sprintf(buf, "%u\n", kraken->color_message[11]);
 }
 
 static ssize_t set_interval(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -225,7 +167,7 @@ static ssize_t set_interval(struct device *dev, struct device_attribute *attr, c
 	if (sscanf(buf, "%hhu", &interval) != 1 || interval == 0)
 		return -EINVAL;
 
-	kraken->interval = interval;
+	kraken->color_message[11] = interval; kraken->color_message[12] = interval;
 
 	kraken_update(kraken);
 
@@ -239,19 +181,14 @@ static ssize_t show_mode(struct device *dev, struct device_attribute *attr, char
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct usb_kraken *kraken = usb_get_intfdata(intf);
 
-	switch (kraken->mode)
-	{
-		case normal:
-			return sprintf(buf, "normal\n");
-		case alternating:
-			return sprintf(buf, "alternating\n");
-		case blinking:
-			return sprintf(buf, "blinking\n");
-		case off:
-			return sprintf(buf, "off\n");
-		default:
-			return sprintf(buf, "unknown\n");
-	}
+	if (kraken->color_message[14] == 1)
+		return sprintf(buf, "alternating\n");
+	else if (kraken->color_message[15] == 1)
+		return sprintf(buf, "blinking\n");
+	else if (kraken->color_message[13] == 1)
+		return sprintf(buf, "normal\n");
+	else
+		return sprintf(buf, "off\n");
 }
 
 static ssize_t set_mode(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -259,14 +196,26 @@ static ssize_t set_mode(struct device *dev, struct device_attribute *attr, const
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct usb_kraken *kraken = usb_get_intfdata(intf);
 
-	if (strncasecmp(buf, "normal", strlen("normal")) == 0)
-		kraken->mode = normal;
-	else if (strncasecmp(buf, "alternating", strlen("alternating")) == 0)
-		kraken->mode = alternating;
-	else if (strncasecmp(buf, "blinking", strlen("blinking")) == 0)
-		kraken->mode = blinking;
-	else if (strncasecmp(buf, "off", strlen("off")) == 0)
-		kraken->mode = off;
+	if (strncasecmp(buf, "normal", strlen("normal")) == 0) {
+		kraken->color_message[13] = 1;
+		kraken->color_message[14] = 0;
+		kraken->color_message[15] = 0;
+	}
+	else if (strncasecmp(buf, "alternating", strlen("alternating")) == 0) {
+		kraken->color_message[13] = 1;
+		kraken->color_message[14] = 1;
+		kraken->color_message[15] = 0;
+	}
+	else if (strncasecmp(buf, "blinking", strlen("blinking")) == 0) {
+		kraken->color_message[13] = 1;
+		kraken->color_message[14] = 0;
+		kraken->color_message[15] = 1;
+	}
+	else if (strncasecmp(buf, "off", strlen("off")) == 0) {
+		kraken->color_message[13] = 0;
+		kraken->color_message[14] = 0;
+		kraken->color_message[15] = 0;
+	}
 	else
 		return -EINVAL;
 
@@ -284,7 +233,7 @@ static ssize_t show_temp(struct device *dev, struct device_attribute *attr, char
 
 	kraken_update(kraken);
 
-	return sprintf(buf, "%u\n", kraken->temp);
+	return sprintf(buf, "%u\n", kraken->status_message[10]);
 }
 
 static DEVICE_ATTR(temp, S_IRUGO, show_temp, NULL);
@@ -296,7 +245,7 @@ static ssize_t show_pump(struct device *dev, struct device_attribute *attr, char
 
 	kraken_update(kraken);
 
-	return sprintf(buf, "%u\n", kraken->pump);
+	return sprintf(buf, "%u\n", 256 * kraken->status_message[8] + kraken->status_message[9]);
 }
 
 static DEVICE_ATTR(pump, S_IRUGO, show_pump, NULL);
@@ -308,7 +257,7 @@ static ssize_t show_fan(struct device *dev, struct device_attribute *attr, char 
 
 	kraken_update(kraken);
 
-	return sprintf(buf, "%u\n", kraken->fan);
+	return sprintf(buf, "%u\n", 256 * kraken->status_message[0] + kraken->status_message[1]);
 }
 
 static DEVICE_ATTR(fan, S_IRUGO, show_fan, NULL);
@@ -337,35 +286,33 @@ static int kraken_probe(struct usb_interface *interface, const struct usb_device
 	dev->udev = usb_get_dev(udev);
 	usb_set_intfdata(interface, dev);
 
-	dev->speed = 50;
-	dev->color.r = 255; dev->color.g = 0; dev->color.b = 0;
-	dev->alternate_color.r = 0; dev->alternate_color.g = 255; dev->alternate_color.b = 0;
-	dev->interval = 1;
-	dev->mode = normal;
-	dev->temp = 0;
-	dev->pump = 0;
-	dev->fan = 0;
+	dev->color_message = kmalloc(19*sizeof(u8), GFP_KERNEL);
+	dev->pump_message = kmalloc(2*sizeof(u8), GFP_KERNEL);
+	dev->fan_message = kmalloc(2*sizeof(u8), GFP_KERNEL);
+	dev->status_message = kmalloc(32*sizeof(u8), GFP_KERNEL);
+	if (
+		(dev->color_message = kmalloc(19*sizeof(u8), GFP_KERNEL)) == NULL ||
+		(dev->pump_message = kmalloc(2*sizeof(u8), GFP_KERNEL)) == NULL ||
+		(dev->fan_message = kmalloc(2*sizeof(u8), GFP_KERNEL)) == NULL ||
+		(dev->status_message = kmalloc(32*sizeof(u8), GFP_KERNEL)) == NULL
+	) {
+		retval = ENOMEM;
+		goto error_messages;
+	}
 
-	dev->pump_message = kmalloc(2 * sizeof(u8), GFP_KERNEL);
-	if (!dev->pump_message)
-		goto error_pump;
-	dev->pump_message[0] = 0x13;
-
-	dev->fan_message = kmalloc(2 * sizeof(u8), GFP_KERNEL);
-	if (!dev->fan_message)
-		goto error_fan;
-	dev->fan_message[0] = 0x12;
-
-	dev->color_message = kmalloc(19 * sizeof(u8), GFP_KERNEL);
-	if (!dev->color_message)
-		goto error_color;
 	dev->color_message[0] = 0x10;
-	dev->color_message[7] = 0xff; dev->color_message[8] = 0x00; dev->color_message[9] = 0x00; dev->color_message[10] = 0x3c;
-	dev->color_message[16] = 0x01; dev->color_message[17] = 0x00; dev->color_message[18] = 0x01;
+	dev->color_message[1] = 0x00; dev->color_message[2] = 0x00; dev->color_message[3] = 0xff;
+	dev->color_message[4] = 0x00; dev->color_message[5] = 0xff; dev->color_message[6] = 0x00;
+	dev->color_message[7] = 0x00; dev->color_message[8] = 0x00; dev->color_message[9] = 0x00; dev->color_message[10] = 0x3c;
+	dev->color_message[11] = 1; dev->color_message[12] = 1;
+	dev->color_message[13] = 1; dev->color_message[14] = 0; dev->color_message[15] = 0;
+	dev->color_message[16] = 0x00; dev->color_message[17] = 0x00; dev->color_message[18] = 0x01;
 
-	dev->status_message = kmalloc(64 * sizeof(u8), GFP_KERNEL);
-	if (!dev->status_message)
-		goto error_status;
+	dev->pump_message[0] = 0x13;
+	dev->pump_message[1] = 50;
+
+	dev->fan_message[0] = 0x12;
+	dev->fan_message[1] = 50;
 
 	if (
 		(retval = device_create_file(&interface->dev, &dev_attr_speed)) ||
@@ -386,20 +333,16 @@ static int kraken_probe(struct usb_interface *interface, const struct usb_device
 	dev_info(&interface->dev, "Kraken connected\n");
 	return 0;
 error:
-	kfree(dev->status_message);
-error_status:
-	kfree(dev->color_message);
-error_color:
-	kfree(dev->fan_message);
-error_fan:
-	kfree(dev->pump_message);
-error_pump:
-	kfree(dev);
-
 	kraken_remove_device_files(interface);
+error_messages:
+	kfree(dev->status_message);
+	kfree(dev->fan_message);
+	kfree(dev->pump_message);
+	kfree(dev->color_message);
 
 	usb_set_intfdata(interface, NULL);
 	usb_put_dev(dev->udev);
+	kfree(dev);
 error_dev:
 	return retval;
 }
@@ -414,9 +357,10 @@ static void kraken_disconnect(struct usb_interface *interface)
 	usb_put_dev(dev->udev);
 
 	kfree(dev->status_message);
-	kfree(dev->color_message);
 	kfree(dev->fan_message);
 	kfree(dev->pump_message);
+	kfree(dev->color_message);
+
 	kfree(dev);
 
 	dev_info(&interface->dev, "Kraken disconnected\n");
