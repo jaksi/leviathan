@@ -29,7 +29,7 @@ In my case, there's only one Kraken connected.
 ```
 
 ## Changing the speed
-The speed must be between 30 and 100, and divisible by 5.
+The speed must be between 30 and 100.
 ```Shell
 echo SPEED > /sys/bus/usb/drivers/kraken/DEVICE/speed
 ```
