@@ -13,7 +13,8 @@ struct usb_kraken {
 	struct usb_device *udev;
 	struct usb_interface *interface;
 	struct hrtimer update_timer;
-	struct tasklet_struct update_tasklet;
+	struct workqueue_struct *update_workqueue;
+	struct work_struct update_work;
 	u8 *color_message, *pump_message, *fan_message, *status_message;
 };
 
@@ -90,8 +91,6 @@ static ssize_t set_speed(struct device *dev, struct device_attribute *attr, cons
 	kraken->pump_message[1] = speed;
 	kraken->fan_message[1] = speed;
 
-	kraken_update(kraken);
-
 	return count;
 }
 
@@ -117,8 +116,6 @@ static ssize_t set_color(struct device *dev, struct device_attribute *attr, cons
 	kraken->color_message[1] = r;
 	kraken->color_message[2] = g;
 	kraken->color_message[3] = b;
-
-	kraken_update(kraken);
 
 	return count;
 }
@@ -146,8 +143,6 @@ static ssize_t set_alternate_color(struct device *dev, struct device_attribute *
 	kraken->color_message[5] = g;
 	kraken->color_message[6] = b;
 
-	kraken_update(kraken);
-
 	return count;
 }
 
@@ -171,8 +166,6 @@ static ssize_t set_interval(struct device *dev, struct device_attribute *attr, c
 		return -EINVAL;
 
 	kraken->color_message[11] = interval; kraken->color_message[12] = interval;
-
-	kraken_update(kraken);
 
 	return count;
 }
@@ -222,8 +215,6 @@ static ssize_t set_mode(struct device *dev, struct device_attribute *attr, const
 	else
 		return -EINVAL;
 
-	kraken_update(kraken);
-
 	return count;
 }
 
@@ -233,8 +224,6 @@ static ssize_t show_temp(struct device *dev, struct device_attribute *attr, char
 {
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct usb_kraken *kraken = usb_get_intfdata(intf);
-
-	kraken_update(kraken);
 
 	return sprintf(buf, "%u\n", kraken->status_message[10]);
 }
@@ -246,8 +235,6 @@ static ssize_t show_pump(struct device *dev, struct device_attribute *attr, char
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct usb_kraken *kraken = usb_get_intfdata(intf);
 
-	kraken_update(kraken);
-
 	return sprintf(buf, "%u\n", 256 * kraken->status_message[8] + kraken->status_message[9]);
 }
 
@@ -257,8 +244,6 @@ static ssize_t show_fan(struct device *dev, struct device_attribute *attr, char 
 {
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct usb_kraken *kraken = usb_get_intfdata(intf);
-
-	kraken_update(kraken);
 
 	return sprintf(buf, "%u\n", 256 * kraken->status_message[0] + kraken->status_message[1]);
 }
@@ -281,18 +266,17 @@ enum hrtimer_restart update_timer_function(struct hrtimer *timer_for_restart)
 {
 	struct usb_kraken *dev = container_of(timer_for_restart, struct usb_kraken, update_timer);
 	ktime_t cur = ktime_get();
-	hrtimer_forward(timer_for_restart, cur, ktime_set(1, 0));
+	hrtimer_forward(timer_for_restart, cur, ktime_set(5, 0));
 	printk("update_timer_function in_interrupt()=%lu in_irq=%lu in_softirq=%lu\n", in_interrupt(), in_irq(), in_softirq());
-	tasklet_schedule(&dev->update_tasklet);
+	queue_work(dev->update_workqueue, &dev->update_work);
 	return HRTIMER_RESTART;
 }
 
-static void update_tasklet_function(unsigned long param)
+static void update_work_function(struct work_struct *param)
 {
-	// Uncomment for a kernel lockup \o/
-	//struct usb_kraken *dev = (struct usb_kraken *)param;
-	//kraken_update(dev);
-	printk("update_tasklet_function in_interrupt()=%lu in_irq=%lu in_softirq=%lu\n", in_interrupt(), in_irq(), in_softirq());
+	struct usb_kraken *dev = container_of(param, struct usb_kraken, update_work);
+	printk("update_work_function in_interrupt()=%lu in_irq=%lu in_softirq=%lu speed=%d\n", in_interrupt(), in_irq(), in_softirq(), dev->fan_message[1]);
+	kraken_update(dev);
 }
 
 static int kraken_probe(struct usb_interface *interface, const struct usb_device_id *id)
@@ -354,8 +338,9 @@ static int kraken_probe(struct usb_interface *interface, const struct usb_device
 	dev_info(&interface->dev, "Kraken connected\n");
 	hrtimer_init(&dev->update_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	dev->update_timer.function = &update_timer_function;
-	hrtimer_start(&dev->update_timer, ktime_set(1, 0), HRTIMER_MODE_REL);
-	tasklet_init(&dev->update_tasklet, update_tasklet_function, (u64)dev);
+	hrtimer_start(&dev->update_timer, ktime_set(5, 0), HRTIMER_MODE_REL);
+	dev->update_workqueue = create_singlethread_workqueue("kraken_up");
+	INIT_WORK(&dev->update_work, &update_work_function);
 	return 0;
 error:
 	kraken_remove_device_files(interface);
