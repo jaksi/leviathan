@@ -15,6 +15,7 @@ struct usb_kraken {
 	struct hrtimer update_timer;
 	struct workqueue_struct *update_workqueue;
 	struct work_struct update_work;
+	bool send_color;
 	u8 *color_message, *pump_message, *fan_message, *status_message;
 };
 
@@ -58,16 +59,24 @@ static int kraken_receive_message(struct usb_kraken *kraken, u8 message[], int e
 static void kraken_update(struct usb_kraken *kraken)
 {
 	int retval = 0;
-	if (
-		(retval = kraken_start_transaction(kraken)) ||
-		(retval = kraken_send_message(kraken, kraken->color_message, 19)) ||
-		(retval = kraken_receive_message(kraken, kraken->status_message, 32)) ||
-		(retval = kraken_start_transaction(kraken)) ||
-		(retval = kraken_send_message(kraken, kraken->pump_message, 2)) ||
-		(retval = kraken_send_message(kraken, kraken->fan_message, 2)) ||
-		(retval = kraken_receive_message(kraken, kraken->status_message, 32))
-	   )
-		dev_err(&kraken->udev->dev, "Failed to update: %d\n", retval);
+	if (kraken->send_color) {
+		if (
+			(retval = kraken_start_transaction(kraken)) ||
+			(retval = kraken_send_message(kraken, kraken->color_message, 19)) ||
+			(retval = kraken_receive_message(kraken, kraken->status_message, 32))
+		   )
+			dev_err(&kraken->udev->dev, "Failed to update: %d\n", retval);
+		kraken->send_color = false;
+	}
+	else {
+		if (
+			(retval = kraken_start_transaction(kraken)) ||
+			(retval = kraken_send_message(kraken, kraken->pump_message, 2)) ||
+			(retval = kraken_send_message(kraken, kraken->fan_message, 2)) ||
+			(retval = kraken_receive_message(kraken, kraken->status_message, 32))
+		   )
+			dev_err(&kraken->udev->dev, "Failed to update: %d\n", retval);
+	}
 }
 
 static ssize_t show_speed(struct device *dev, struct device_attribute *attr, char *buf)
@@ -116,6 +125,8 @@ static ssize_t set_color(struct device *dev, struct device_attribute *attr, cons
 	kraken->color_message[2] = g;
 	kraken->color_message[3] = b;
 
+	kraken->send_color = true;
+
 	return count;
 }
 
@@ -142,6 +153,8 @@ static ssize_t set_alternate_color(struct device *dev, struct device_attribute *
 	kraken->color_message[5] = g;
 	kraken->color_message[6] = b;
 
+	kraken->send_color = true;
+
 	return count;
 }
 
@@ -165,6 +178,8 @@ static ssize_t set_interval(struct device *dev, struct device_attribute *attr, c
 		return -EINVAL;
 
 	kraken->color_message[11] = interval; kraken->color_message[12] = interval;
+
+	kraken->send_color = true;
 
 	return count;
 }
@@ -213,6 +228,8 @@ static ssize_t set_mode(struct device *dev, struct device_attribute *attr, const
 	}
 	else
 		return -EINVAL;
+
+	kraken->send_color = true;
 
 	return count;
 }
@@ -337,6 +354,7 @@ static int kraken_probe(struct usb_interface *interface, const struct usb_device
 	hrtimer_start(&dev->update_timer, ktime_set(1, 0), HRTIMER_MODE_REL);
 	dev->update_workqueue = create_singlethread_workqueue("kraken_up");
 	INIT_WORK(&dev->update_work, &update_work_function);
+	dev->send_color = true;
 	return 0;
 error:
 	kraken_remove_device_files(interface);
