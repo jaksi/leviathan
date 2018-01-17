@@ -68,7 +68,6 @@ static void kraken_update(struct usb_kraken *kraken)
 		(retval = kraken_receive_message(kraken, kraken->status_message, 32))
 	   )
 		dev_err(&kraken->udev->dev, "Failed to update: %d\n", retval);
-	printk("kraken_update in_interrupt()=%lu in_irq=%lu in_softirq=%lu\n", in_interrupt(), in_irq(), in_softirq());
 }
 
 static ssize_t show_speed(struct device *dev, struct device_attribute *attr, char *buf)
@@ -262,20 +261,17 @@ static void kraken_remove_device_files(struct usb_interface *interface)
 	device_remove_file(&interface->dev, &dev_attr_fan);
 }
 
-enum hrtimer_restart update_timer_function(struct hrtimer *timer_for_restart)
+enum hrtimer_restart update_timer_function(struct hrtimer *update_timer)
 {
-	struct usb_kraken *dev = container_of(timer_for_restart, struct usb_kraken, update_timer);
-	ktime_t cur = ktime_get();
-	hrtimer_forward(timer_for_restart, cur, ktime_set(1, 0));
-	printk("update_timer_function in_interrupt()=%lu in_irq=%lu in_softirq=%lu\n", in_interrupt(), in_irq(), in_softirq());
+	struct usb_kraken *dev = container_of(update_timer, struct usb_kraken, update_timer);
 	queue_work(dev->update_workqueue, &dev->update_work);
+	hrtimer_forward(update_timer, ktime_get(), ktime_set(1, 0));
 	return HRTIMER_RESTART;
 }
 
 static void update_work_function(struct work_struct *param)
 {
 	struct usb_kraken *dev = container_of(param, struct usb_kraken, update_work);
-	printk("update_work_function in_interrupt()=%lu in_irq=%lu in_softirq=%lu\n", in_interrupt(), in_irq(), in_softirq());
 	kraken_update(dev);
 }
 
@@ -371,6 +367,8 @@ static void kraken_disconnect(struct usb_interface *interface)
 	kfree(dev->pump_message);
 	kfree(dev->color_message);
 
+	flush_workqueue(dev->update_workqueue);
+	destroy_workqueue(dev->update_workqueue);
 	hrtimer_cancel(&dev->update_timer);
 	kfree(dev);
 
