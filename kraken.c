@@ -45,7 +45,7 @@ static int kraken_send_message(struct usb_kraken *kraken, u8 *message, int lengt
 	return 0;
 }
 
-static int kraken_receive_message(struct usb_kraken *kraken, u8 message[], int expected_length)
+static int kraken_receive_message(struct usb_kraken *kraken, u8 *message, int expected_length)
 {
 	int received;
 	int retval = usb_bulk_msg(kraken->udev, usb_rcvbulkpipe(kraken->udev, 2), message, expected_length, &received, 3000);
