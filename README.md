@@ -40,7 +40,7 @@ The color must be in hexadecimal format (e.g., `ff00ff` for magenta).
 echo COLOR > /sys/bus/usb/drivers/kraken/DEVICE/color
 ```
 
-The alternate color for the alternating mode can be set similarly.
+The alternate color for the alternating color mode can be set similarly.
 ```Shell
 echo COLOR > /sys/bus/usb/drivers/kraken/DEVICE/alternate_color
 ```
@@ -51,10 +51,10 @@ The interval is in seconds and must be between 1 and 255.
 echo INTERVAL > /sys/bus/usb/drivers/kraken/DEVICE/interval
 ```
 
-## Changing the mode
-The mode must be one of normal, alternating, blinking and off.
+## Changing the color mode
+The color mode must be one of normal, alternating, blinking and off.
 ```Shell
-echo MODE > /sys/bus/usb/drivers/kraken/DEVICE/mode
+echo COLOR_MODE > /sys/bus/usb/drivers/kraken/DEVICE/color_mode
 ```
 
 ## Monitoring the liquid temperature

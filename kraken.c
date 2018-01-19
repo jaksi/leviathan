@@ -186,7 +186,7 @@ static ssize_t set_interval(struct device *dev, struct device_attribute *attr, c
 
 static DEVICE_ATTR(interval, S_IRUGO | S_IWUSR | S_IWGRP, show_interval, set_interval);
 
-static ssize_t show_mode(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t show_color_mode(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct usb_kraken *kraken = usb_get_intfdata(intf);
@@ -201,7 +201,7 @@ static ssize_t show_mode(struct device *dev, struct device_attribute *attr, char
 		return sprintf(buf, "off\n");
 }
 
-static ssize_t set_mode(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+static ssize_t set_color_mode(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct usb_kraken *kraken = usb_get_intfdata(intf);
@@ -234,7 +234,7 @@ static ssize_t set_mode(struct device *dev, struct device_attribute *attr, const
 	return count;
 }
 
-static DEVICE_ATTR(mode, S_IRUGO | S_IWUSR | S_IWGRP, show_mode, set_mode);
+static DEVICE_ATTR(color_mode, S_IRUGO | S_IWUSR | S_IWGRP, show_color_mode, set_color_mode);
 
 static ssize_t show_temp(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -272,7 +272,7 @@ static void kraken_remove_device_files(struct usb_interface *interface)
 	device_remove_file(&interface->dev, &dev_attr_color);
 	device_remove_file(&interface->dev, &dev_attr_alternate_color);
 	device_remove_file(&interface->dev, &dev_attr_interval);
-	device_remove_file(&interface->dev, &dev_attr_mode);
+	device_remove_file(&interface->dev, &dev_attr_color_mode);
 	device_remove_file(&interface->dev, &dev_attr_temp);
 	device_remove_file(&interface->dev, &dev_attr_pump);
 	device_remove_file(&interface->dev, &dev_attr_fan);
@@ -337,7 +337,7 @@ static int kraken_probe(struct usb_interface *interface, const struct usb_device
 		(retval = device_create_file(&interface->dev, &dev_attr_color)) ||
 		(retval = device_create_file(&interface->dev, &dev_attr_alternate_color)) ||
 		(retval = device_create_file(&interface->dev, &dev_attr_interval)) ||
-		(retval = device_create_file(&interface->dev, &dev_attr_mode)) ||
+		(retval = device_create_file(&interface->dev, &dev_attr_color_mode)) ||
 		(retval = device_create_file(&interface->dev, &dev_attr_temp)) ||
 		(retval = device_create_file(&interface->dev, &dev_attr_pump)) ||
 		(retval = device_create_file(&interface->dev, &dev_attr_fan))
